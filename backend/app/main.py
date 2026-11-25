@@ -49,7 +49,6 @@ EDGES = [
     {"id":"e16","from":"university","to":"hospital","mode":"Metro","minutes":11,"fare":12,"walk":0,"departures":[0,10,20,30,40,50]},
     {"id":"e17","from":"techpark","to":"university","mode":"Bus","minutes":12,"fare":10,"walk":0,"departures":[0,15,30,45]},
     {"id":"e18","from":"airport","to":"techpark","mode":"Bus","minutes":25,"fare":20,"walk":0,"departures":[0,30]},
-    {"id":"e19","from":"market","to":"techpark","mode":"Bus","minutes":25,"fare":18,"walk":0,"departures":[0,15,30,45]},
 ]
 
 class PlanRequest(BaseModel):
@@ -110,10 +109,10 @@ def find_paths(origin, destination, departure, disruptions, max_walking, max_bud
     counter = itertools.count()
     heapq.heappush(queue, (departure, next(counter), origin, [], 0.0, 0, [], None))
     results = []
-    expansions = 0
-    while queue and len(results) < 12 and expansions < 12000:
+    # Explore every feasible simple path. The no-revisited-stop check below
+    # prevents cycles, so the search is finite for the current fixed network.
+    while queue:
         now, _, node, path, fare, walking, legs, previous_mode = heapq.heappop(queue)
-        expansions += 1
         if node == destination and path:
             results.append({
                 "id": "-".join(path),
@@ -126,8 +125,6 @@ def find_paths(origin, destination, departure, disruptions, max_walking, max_bud
                 "stops": [STOPS_BY_ID[origin]["name"]] + [STOPS_BY_ID[leg["to"]]["name"] for leg in legs],
                 "legs": legs,
             })
-            continue
-        if len(path) >= 6:
             continue
         for edge in graph.get(node, []):
             if edge["id"] in path or edge["to"] in [origin] + [x["to"] for x in legs]:
@@ -204,8 +201,6 @@ def plan(req: PlanRequest):
     routes = find_paths(req.origin, req.destination, departure, req.disruptions,
                         req.max_walking_m, req.budget, deadline)
     routes.sort(key=lambda r: score_route(r, req.preference))
-    # Keep alternatives with differing tradeoffs where possible
-    routes = routes[:5]
     for i, r in enumerate(routes):
         r["rank"] = i + 1
         r["recommendation"] = "Recommended" if i == 0 else "Alternative"
